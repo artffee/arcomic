@@ -23,8 +23,11 @@ export async function compileTarget(imageEl, onProgress = () => {}) {
   const compiler = new Compiler()
   await compiler.compileImageTargets([imageEl], (p) => onProgress(p))
   const exported = await compiler.exportData()
-  // exportData may return a Uint8Array view — normalise to a plain ArrayBuffer.
-  return exported instanceof ArrayBuffer ? exported : exported.buffer
+  // exportData returns a Uint8Array that may be a *view* into a larger backing
+  // buffer. Taking `.buffer` would keep the extra trailing bytes, which makes
+  // MindAR's loader throw "Extra N bytes found". Copy out exactly byteLength.
+  if (exported instanceof ArrayBuffer) return exported
+  return exported.slice().buffer // TypedArray.slice() -> new exact-size buffer
 }
 
 /** Lazily import the MindAR three.js engine (also brings its own bundled three). */
