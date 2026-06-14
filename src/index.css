@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-ink-950 text-white font-body antialiased;
+  margin: 0;
+}
+
+@layer components {
+  .btn-pop {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl bg-pop px-6 py-3
+      font-display text-xl tracking-wide text-ink-950 shadow-panel
+      transition-transform hover:-translate-y-0.5 active:translate-y-0;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border-2 border-white/20
+      px-6 py-3 font-semibold text-white transition-colors hover:border-pop hover:text-pop;
+  }
+  .comic-panel {
+    @apply rounded-2xl border-2 border-ink-950 bg-panel shadow-panel;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-white/15
+      bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-white/70;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-semibold text-white/80;
+  }
+  .input {
+    @apply w-full rounded-xl border-2 border-white/10 bg-ink-800 px-4 py-3 text-white
+      placeholder-white/30 outline-none transition-colors focus:border-electric;
+  }
+}
+
+/* The MindAR engine injects its own full-screen <video> + <canvas>. */
+.mindar-viewer,
+.mindar-viewer * {
+  position: relative;
+}
