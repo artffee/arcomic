@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import QRCode from 'qrcode'
 import { listExperiences, deleteExperience } from '../lib/db.js'
+import { deleteExperienceCloud } from '../lib/api.js'
 
 export default function Dashboard() {
   const [items, setItems] = useState(null)
@@ -31,8 +32,8 @@ export default function Dashboard() {
   }, [items])
 
   async function handleDelete(id) {
-    if (!confirm('Delete this experience? This cannot be undone.')) return
-    await deleteExperience(id)
+    if (!confirm('Delete this experience? This removes it everywhere and cannot be undone.')) return
+    await Promise.all([deleteExperience(id), deleteExperienceCloud(id)])
     refresh()
   }
 
@@ -78,18 +79,19 @@ export default function Dashboard() {
 }
 
 function Card({ exp, onShare, onDelete }) {
-  const [thumb, setThumb] = useState(null)
-  useEffect(() => {
-    const url = URL.createObjectURL(exp.image)
-    setThumb(url)
-    return () => URL.revokeObjectURL(url)
-  }, [exp.image])
+  const thumb = exp.pages?.[0]?.imageUrl
+  const pageCount = exp.pages?.length || 1
 
   return (
     <div className="comic-panel overflow-hidden">
       <div className="relative aspect-[4/3] bg-ink-950">
         {thumb && (
           <img src={thumb} alt={exp.title} className="h-full w-full object-cover" />
+        )}
+        {pageCount > 1 && (
+          <span className="absolute right-2 top-2 rounded-full bg-ink-950/80 px-2.5 py-1 text-xs font-bold backdrop-blur">
+            {pageCount} pages
+          </span>
         )}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink-950 to-transparent p-3">
           <h3 className="font-display text-xl tracking-wide drop-shadow">
@@ -147,6 +149,37 @@ function ShareModal({ exp, onClose }) {
     })
   }
 
+  function downloadQR() {
+    if (!qr) return
+    const a = document.createElement('a')
+    a.href = qr
+    a.download = `arcomic-${exp.id}.png`
+    a.click()
+  }
+
+  // A print-ready sheet: QR + title + scan instructions, opened in a new tab.
+  function printSheet() {
+    const w = window.open('', '_blank')
+    if (!w) return
+    w.document.write(`<!doctype html><html><head><title>${escapeHtml(
+      exp.title,
+    )} — ARComic</title><style>
+      *{font-family:system-ui,sans-serif;text-align:center}
+      body{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:90vh;margin:0;padding:40px}
+      img{width:300px;height:300px;border:6px solid #08070d;border-radius:16px}
+      h1{font-size:28px;margin:24px 0 4px}p{color:#444;margin:4px 0;font-size:16px}
+      .brand{margin-top:18px;font-weight:800;letter-spacing:1px;color:#ff3d7f}
+    </style></head><body>
+      <img src="${qr}" alt="QR"/>
+      <h1>${escapeHtml(exp.title)}</h1>
+      <p>Scan this code, then point your camera at the comic page.</p>
+      <p style="color:#888;font-size:13px">${url}</p>
+      <div class="brand">ARComic — comics that come alive</div>
+      <script>window.onload=()=>setTimeout(()=>window.print(),250)</script>
+    </body></html>`)
+    w.document.close()
+  }
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-ink-950/80 p-4 backdrop-blur"
@@ -188,12 +221,28 @@ function ShareModal({ exp, onClose }) {
           </button>
         </div>
 
-        <div className="mt-3 rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-xs text-gold">
-          Heads up: experiences live in this browser only. To open on a phone,
-          run the dev server on your network and use that address.
+        <div className="mt-3 flex gap-2">
+          <button onClick={downloadQR} className="btn-ghost flex-1 !py-2 !text-sm">
+            ⬇ Download QR
+          </button>
+          <button onClick={printSheet} className="btn-ghost flex-1 !py-2 !text-sm">
+            🖨 Print sheet
+          </button>
+        </div>
+
+        <div className="mt-3 rounded-lg border border-electric/30 bg-electric/10 px-3 py-2 text-xs text-electric-soft">
+          Published to the cloud — this link and QR work on any phone. Print the
+          QR next to your comic page so readers can scan it.
         </div>
       </div>
     </div>
+  )
+}
+
+function escapeHtml(s) {
+  return String(s).replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c],
   )
 }
 

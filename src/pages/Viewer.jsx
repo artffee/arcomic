@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import * as THREE from 'three'
 import { getExperience } from '../lib/db.js'
+import { fetchExperience } from '../lib/api.js'
 import { loadMindARThree } from '../lib/mindar.js'
 
 const PHASE = {
@@ -12,42 +13,58 @@ const PHASE = {
   ERROR: 'error',
 }
 
+// Cover-fit a video texture (videoAspect = h/w) onto a plane (pageAspect = h/w).
+function coverFit(texture, pageAspect, videoAspect) {
+  const planeWH = 1 / pageAspect
+  const videoWH = 1 / videoAspect
+  texture.center.set(0.5, 0.5)
+  if (videoWH > planeWH) {
+    const r = planeWH / videoWH
+    texture.repeat.set(r, 1)
+  } else {
+    const r = videoWH / planeWH
+    texture.repeat.set(1, r)
+  }
+}
+
 export default function Viewer() {
   const { id } = useParams()
   const containerRef = useRef(null)
   const mindarRef = useRef(null)
-  const videoElRef = useRef(null)
+  const planesRef = useRef([]) // [{ video, material, targetOpacity }]
   const objectUrls = useRef([])
 
   const [exp, setExp] = useState(null)
   const [phase, setPhase] = useState(PHASE.LOADING)
   const [error, setError] = useState('')
-  const [tracking, setTracking] = useState(false)
+  const [foundCount, setFoundCount] = useState(0)
   const [muted, setMuted] = useState(true)
 
-  // Load the experience record.
+  // Load the experience: cloud first (works cross-device), then local fallback.
   useEffect(() => {
     let alive = true
-    getExperience(id).then((record) => {
+    ;(async () => {
+      let record = null
+      try {
+        record = await fetchExperience(id)
+      } catch {
+        /* network issue — try local */
+      }
+      if (!record) record = await getExperience(id)
       if (!alive) return
-      if (!record) {
-        setError('not-found')
+      if (!record || !record.targetUrl) {
         setPhase(PHASE.NOTFOUND)
       } else {
         setExp(record)
         setPhase(PHASE.READY)
       }
-    })
+    })()
     return () => {
       alive = false
     }
   }, [id])
 
-  // Cleanup on unmount.
-  useEffect(() => {
-    return () => stop()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  useEffect(() => () => stop(), []) // cleanup on unmount
 
   function track(url) {
     objectUrls.current.push(url)
@@ -60,8 +77,9 @@ export default function Viewer() {
       setError('')
       const MindARThree = await loadMindARThree()
 
-      const mindUrl = track(URL.createObjectURL(new Blob([exp.target])))
-      const videoUrl = track(URL.createObjectURL(exp.video))
+      // Pull the compiled target down and hand MindAR a local blob URL.
+      const targetBuf = await (await fetch(exp.targetUrl)).arrayBuffer()
+      const mindUrl = track(URL.createObjectURL(new Blob([targetBuf])))
 
       const mindar = new MindARThree({
         container: containerRef.current,
@@ -72,36 +90,55 @@ export default function Viewer() {
       })
       mindarRef.current = mindar
       const { renderer, scene, camera } = mindar
+      planesRef.current = []
 
-      // Hidden video element feeding a texture.
-      const videoEl = document.createElement('video')
-      videoEl.src = videoUrl
-      videoEl.loop = true
-      videoEl.muted = muted
-      videoEl.playsInline = true
-      videoEl.crossOrigin = 'anonymous'
-      videoElRef.current = videoEl
+      exp.pages.forEach((page, i) => {
+        const videoEl = document.createElement('video')
+        videoEl.src = page.videoUrl
+        videoEl.loop = true
+        videoEl.muted = muted
+        videoEl.playsInline = true
+        videoEl.crossOrigin = 'anonymous'
 
-      const texture = new THREE.VideoTexture(videoEl)
-      texture.colorSpace = THREE.SRGBColorSpace
-      const geometry = new THREE.PlaneGeometry(1, exp.videoAspect || 1)
-      const material = new THREE.MeshBasicMaterial({ map: texture })
-      const plane = new THREE.Mesh(geometry, material)
+        const texture = new THREE.VideoTexture(videoEl)
+        texture.colorSpace = THREE.SRGBColorSpace
+        coverFit(texture, page.pageAspect || page.videoAspect || 1, page.videoAspect || 1)
 
-      const anchor = mindar.addAnchor(0)
-      anchor.group.add(plane)
+        const material = new THREE.MeshBasicMaterial({
+          map: texture,
+          transparent: true,
+          opacity: 0,
+        })
+        const geometry = new THREE.PlaneGeometry(1, page.pageAspect || page.videoAspect || 1)
+        const plane = new THREE.Mesh(geometry, material)
 
-      anchor.onTargetFound = () => {
-        setTracking(true)
-        videoEl.play().catch(() => {})
-      }
-      anchor.onTargetLost = () => {
-        setTracking(false)
-        videoEl.pause()
-      }
+        const anchor = mindar.addAnchor(i)
+        anchor.group.add(plane)
+        const entry = { video: videoEl, material, targetOpacity: 0 }
+        planesRef.current.push(entry)
+
+        anchor.onTargetFound = () => {
+          entry.targetOpacity = 1
+          videoEl.play().catch(() => {})
+          setFoundCount((c) => c + 1)
+        }
+        anchor.onTargetLost = () => {
+          entry.targetOpacity = 0
+          setFoundCount((c) => Math.max(0, c - 1))
+        }
+      })
 
       await mindar.start()
-      renderer.setAnimationLoop(() => renderer.render(scene, camera))
+      renderer.setAnimationLoop(() => {
+        // Smooth fade in/out; pause a fully-faded video to save cycles.
+        for (const p of planesRef.current) {
+          p.material.opacity += (p.targetOpacity - p.material.opacity) * 0.15
+          if (p.targetOpacity === 0 && p.material.opacity < 0.02 && !p.video.paused) {
+            p.video.pause()
+          }
+        }
+        renderer.render(scene, camera)
+      })
       setPhase(PHASE.RUNNING)
     } catch (e) {
       console.error(e)
@@ -122,11 +159,11 @@ export default function Viewer() {
       /* ignore */
     }
     mindarRef.current = null
-    if (videoElRef.current) {
-      videoElRef.current.pause()
-      videoElRef.current.src = ''
-      videoElRef.current = null
+    for (const p of planesRef.current) {
+      p.video.pause()
+      p.video.src = ''
     }
+    planesRef.current = []
     objectUrls.current.forEach((u) => URL.revokeObjectURL(u))
     objectUrls.current = []
   }
@@ -134,12 +171,13 @@ export default function Viewer() {
   function toggleMute() {
     const next = !muted
     setMuted(next)
-    if (videoElRef.current) videoElRef.current.muted = next
+    for (const p of planesRef.current) p.video.muted = next
   }
+
+  const tracking = foundCount > 0
 
   return (
     <div className="fixed inset-0 bg-ink-950 text-white">
-      {/* MindAR injects its camera <video> + <canvas> here */}
       <div ref={containerRef} className="absolute inset-0" />
 
       {/* Top bar */}
@@ -151,7 +189,7 @@ export default function Viewer() {
           ← Exit
         </Link>
         {exp && (
-          <span className="rounded-full bg-ink-950/70 px-4 py-2 text-sm font-semibold backdrop-blur">
+          <span className="max-w-[45%] truncate rounded-full bg-ink-950/70 px-4 py-2 text-sm font-semibold backdrop-blur">
             {exp.title}
           </span>
         )}
@@ -167,7 +205,6 @@ export default function Viewer() {
         )}
       </div>
 
-      {/* Overlays per phase */}
       {phase === PHASE.LOADING && (
         <Center>
           <Spinner />
@@ -182,8 +219,8 @@ export default function Viewer() {
             Experience not found
           </h2>
           <p className="mt-2 max-w-xs text-white/60">
-            This AR experience doesn’t exist on this device. Experiences are
-            stored locally in the browser that created them.
+            This AR experience doesn’t exist (or was removed). Double-check the
+            link.
           </p>
           <Link to="/create" className="btn-pop mt-6">
             Create one
@@ -194,11 +231,10 @@ export default function Viewer() {
       {phase === PHASE.READY && exp && (
         <Center>
           <ScanGraphic />
-          <h2 className="mt-6 font-display text-4xl tracking-wide">
-            {exp.title}
-          </h2>
+          <h2 className="mt-6 font-display text-4xl tracking-wide">{exp.title}</h2>
           <p className="mt-2 max-w-xs text-white/60">
             Point your camera at the comic page to bring it to life.
+            {exp.pages.length > 1 && ` ${exp.pages.length} pages in this book.`}
           </p>
           <button onClick={start} className="btn-pop mt-6 !text-2xl">
             Start camera
@@ -216,31 +252,26 @@ export default function Viewer() {
             Couldn’t start
           </h2>
           <p className="mt-2 max-w-xs text-white/60">{error}</p>
-          <button
-            onClick={() => setPhase(PHASE.READY)}
-            className="btn-ghost mt-6"
-          >
+          <button onClick={() => setPhase(PHASE.READY)} className="btn-ghost mt-6">
             Try again
           </button>
         </Center>
       )}
 
-      {/* Running hint */}
-      {phase === PHASE.RUNNING && !tracking && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-10 z-20 flex justify-center">
-          <div className="flex items-center gap-3 rounded-full bg-ink-950/70 px-5 py-3 backdrop-blur">
-            <span className="h-3 w-3 animate-pulse rounded-full bg-pop" />
-            <span className="text-sm font-semibold">
-              Scanning… aim at the comic page
-            </span>
-          </div>
-        </div>
-      )}
-      {phase === PHASE.RUNNING && tracking && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-10 z-20 flex justify-center">
-          <div className="rounded-full bg-pop/90 px-5 py-3 text-sm font-bold text-ink-950 backdrop-blur">
-            ✦ Tracking — enjoy the show
-          </div>
+      {phase === PHASE.RUNNING && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-10 z-20 flex justify-center px-4">
+          {tracking ? (
+            <div className="rounded-full bg-pop/90 px-5 py-3 text-sm font-bold text-ink-950 backdrop-blur">
+              ✦ Tracking — enjoy the show
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 rounded-full bg-ink-950/70 px-5 py-3 backdrop-blur">
+              <span className="h-3 w-3 animate-pulse rounded-full bg-pop" />
+              <span className="text-sm font-semibold">
+                Scanning… slowly aim at the comic page
+              </span>
+            </div>
+          )}
         </div>
       )}
     </div>

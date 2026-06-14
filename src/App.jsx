@@ -1,6 +1,7 @@
 import { Routes, Route, useLocation } from 'react-router-dom'
 import Navbar from './components/Navbar.jsx'
 import Footer from './components/Footer.jsx'
+import ErrorBoundary from './components/ErrorBoundary.jsx'
 import Home from './pages/Home.jsx'
 import Create from './pages/Create.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -13,9 +14,11 @@ export default function App() {
 
   if (bare) {
     return (
-      <Routes>
-        <Route path="/view/:id" element={<Viewer />} />
-      </Routes>
+      <ErrorBoundary>
+        <Routes>
+          <Route path="/view/:id" element={<Viewer />} />
+        </Routes>
+      </ErrorBoundary>
     )
   }
 
@@ -23,12 +26,14 @@ export default function App() {
     <div className="flex min-h-full flex-col">
       <Navbar />
       <main className="flex-1">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/create" element={<Create />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="*" element={<Home />} />
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/create" element={<Create />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="*" element={<Home />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
       <Footer />
     </div>

@@ -142,8 +142,32 @@ try {
   await page.getByRole('link', { name: 'View AR' }).first().waitFor({ timeout: 5000 })
   ok('Experience card persisted in dashboard (IndexedDB round-trip)')
 
-  // 4. AR viewer boots the camera engine (fake camera)
-  log('Open the AR viewer and start the (fake) camera')
+  // 4. CROSS-DEVICE: open the share link in a FRESH context (no IndexedDB),
+  //    simulating a different phone — proves the cloud backend serves it.
+  log('Open share link in a clean context (cross-device cloud fetch)')
+  const ctx2 = await browser.newContext()
+  await ctx2.grantPermissions(['camera'], { origin: BASE })
+  const page2 = await ctx2.newPage()
+  const page2Errors = []
+  page2.on('pageerror', (e) => page2Errors.push(e.message))
+  await page2.goto(shareUrl, { waitUntil: 'networkidle' })
+  if (await page2.getByText('Experience not found').isVisible().catch(() => false)) {
+    fail('Cross-device fetch failed: viewer says "Experience not found"')
+  }
+  await page2.getByRole('button', { name: 'Start camera' }).click()
+  const scan2 = page2.getByText('aim at the comic page')
+  const err2 = page2.getByText("Couldn't start")
+  await Promise.race([
+    scan2.waitFor({ timeout: 60000 }),
+    err2.waitFor({ timeout: 60000 }),
+  ])
+  if (await err2.isVisible()) fail('Cross-device viewer errored starting the engine')
+  ok('Share link works in a clean context — cloud sharing verified ✦')
+  pageErrors.push(...page2Errors)
+  await ctx2.close()
+
+  // 5. Same-context viewer sanity (local fallback path also fine)
+  log('Open the AR viewer in the original context and start the (fake) camera')
   await page.goto(shareUrl, { waitUntil: 'networkidle' })
   await page.getByRole('button', { name: 'Start camera' }).click()
   // RUNNING phase shows the scanning hint; ERROR phase shows "Couldn't start".

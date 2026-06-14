@@ -5,3 +5,6 @@ dist
 npm-debug.log*
 
 .vercel
+.env*
+
+tests/failure.png

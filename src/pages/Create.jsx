@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { makeId, saveExperience } from '../lib/db.js'
-import { loadImageElement, compileTarget } from '../lib/mindar.js'
+import { loadImageElement, compileTargets } from '../lib/mindar.js'
+import { uploadMedia, putExperience } from '../lib/api.js'
 
 const STATES = {
   IDLE: 'idle',
   COMPILING: 'compiling',
+  UPLOADING: 'uploading',
   SAVING: 'saving',
   DONE: 'done',
   ERROR: 'error',
@@ -24,12 +26,29 @@ export default function Create() {
   useEffect(() => () => image && URL.revokeObjectURL(image.url), [image])
   useEffect(() => () => video && URL.revokeObjectURL(video.url), [video])
 
+  const MAX_VIDEO_MB = 60
+  const MAX_IMAGE_MB = 20
+
   function pickImage(file) {
     if (!file) return
-    setImage({ file, url: URL.createObjectURL(file) })
+    setError('')
+    if (file.size > MAX_IMAGE_MB * 1024 * 1024)
+      return setError(`Image is too large (max ${MAX_IMAGE_MB} MB).`)
+    const url = URL.createObjectURL(file)
+    // Warn if the page is low-res — MindAR tracks detailed, high-res art better.
+    const probe = new Image()
+    probe.onload = () => {
+      if (Math.min(probe.naturalWidth, probe.naturalHeight) < 480)
+        setError('Heads up: low-resolution pages track poorly. 800px+ recommended.')
+    }
+    probe.src = url
+    setImage({ file, url })
   }
   function pickVideo(file) {
     if (!file) return
+    setError('')
+    if (file.size > MAX_VIDEO_MB * 1024 * 1024)
+      return setError(`Video is too large (max ${MAX_VIDEO_MB} MB). Trim or compress it.`)
     setVideo({ file, url: URL.createObjectURL(file) })
   }
 
@@ -51,25 +70,45 @@ export default function Create() {
     if (!video) return setError('Upload a video to overlay on the page.')
 
     try {
+      const id = makeId()
+
+      // 1. Compile the AR target in-browser.
       setStatus(STATES.COMPILING)
       setProgress(1)
       const imgEl = await loadImageElement(image.url)
-      const target = await compileTarget(imgEl, (p) =>
+      const target = await compileTargets([imgEl], (p) =>
         setProgress(Math.max(1, Math.round(p))),
       )
       const aspect = await videoAspect(video.url)
 
+      // 2. Upload media straight to cloud storage so share links work anywhere.
+      setStatus(STATES.UPLOADING)
+      const [imageUrl, videoUrl, targetUrl] = await Promise.all([
+        uploadMedia(id, 'image', image.file, image.file.type),
+        uploadMedia(id, 'video', video.file, video.file.type),
+        uploadMedia(id, 'target', new Blob([target]), 'application/octet-stream'),
+      ])
+
+      // 3. Write metadata (cloud + a light local index for the dashboard).
       setStatus(STATES.SAVING)
-      const id = makeId()
-      await saveExperience({
+      const meta = {
         id,
         title: title.trim(),
         createdAt: Date.now(),
-        image: image.file,
-        video: video.file,
-        target,
-        videoAspect: aspect,
-      })
+        targetUrl,
+        pages: [
+          {
+            imageUrl,
+            videoUrl,
+            videoAspect: aspect, // height / width of the video
+            pageAspect: imgEl.naturalHeight / imgEl.naturalWidth,
+            label: title.trim(),
+          },
+        ],
+      }
+      await putExperience(meta)
+      await saveExperience(meta)
+
       setStatus(STATES.DONE)
       navigate(`/dashboard?new=${id}`)
     } catch (e) {
@@ -79,7 +118,15 @@ export default function Create() {
     }
   }
 
-  const busy = status === STATES.COMPILING || status === STATES.SAVING
+  const busy =
+    status === STATES.COMPILING ||
+    status === STATES.UPLOADING ||
+    status === STATES.SAVING
+  const statusLabel = {
+    [STATES.COMPILING]: 'Compiling AR target…',
+    [STATES.UPLOADING]: 'Uploading to the cloud…',
+    [STATES.SAVING]: 'Saving…',
+  }[status]
 
   return (
     <div className="mx-auto max-w-5xl px-5 py-12">
@@ -169,11 +216,7 @@ export default function Create() {
             {busy && (
               <div className="mb-4">
                 <div className="mb-1 flex justify-between text-sm">
-                  <span className="font-semibold">
-                    {status === STATES.COMPILING
-                      ? 'Compiling AR target…'
-                      : 'Saving…'}
-                  </span>
+                  <span className="font-semibold">{statusLabel}</span>
                   <span className="text-white/50">
                     {status === STATES.COMPILING ? `${progress}%` : ''}
                   </span>
@@ -207,7 +250,7 @@ export default function Create() {
               {busy ? 'Working…' : 'Publish experience'}
             </button>
             <p className="mt-3 text-center text-xs text-white/40">
-              Stored locally on this device — nothing is uploaded.
+              Published to the cloud so your share link works on any device.
             </p>
           </div>
         </div>
