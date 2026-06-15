@@ -59,72 +59,72 @@ try {
   await page.getByPlaceholder('e.g. Issue #1 — The Awakening').fill('E2E Test Comic')
   ok('Title field works')
 
-  // Generate a feature-rich image + a real webm video entirely in-browser,
-  // then hand them to the hidden <input type=file> elements the way the UI does.
-  log('Generate real image + video and attach them')
+  // Make it a 2-page book to exercise the multi-page path.
+  log('Add a second page, then attach real images + videos to both')
+  await page.getByRole('button', { name: '+ Add another page' }).click()
   await page.evaluate(async () => {
-    function setFile(selector, file) {
-      const input = document.querySelector(selector)
+    function setNthFile(selector, n, file) {
+      const input = document.querySelectorAll(selector)[n]
       const dt = new DataTransfer()
       dt.items.add(file)
       input.files = dt.files
       input.dispatchEvent(new Event('change', { bubbles: true }))
     }
-
-    // Feature-rich trigger image (MindAR needs detail/contrast to compile).
-    const c = document.createElement('canvas')
-    c.width = 640
-    c.height = 800
-    const ctx = c.getContext('2d')
-    ctx.fillStyle = '#111'
-    ctx.fillRect(0, 0, c.width, c.height)
-    const rnd = (n) => Math.floor(Math.random() * n)
-    for (let i = 0; i < 260; i++) {
-      ctx.fillStyle = `rgb(${rnd(256)},${rnd(256)},${rnd(256)})`
-      ctx.fillRect(rnd(c.width), rnd(c.height), 10 + rnd(60), 10 + rnd(60))
-      ctx.strokeStyle = '#fff'
-      ctx.strokeRect(rnd(c.width), rnd(c.height), 20 + rnd(80), 20 + rnd(80))
-    }
-    ctx.fillStyle = '#fff'
-    ctx.font = 'bold 70px sans-serif'
-    ctx.fillText('KA-POW!', 40, 420)
-    const imgBlob = await new Promise((r) => c.toBlob(r, 'image/png'))
-    setFile('input[accept="image/*"]', new File([imgBlob], 'page.png', { type: 'image/png' }))
-
-    // Real ~0.7s webm recorded from an animated canvas.
-    const vc = document.createElement('canvas')
-    vc.width = 320
-    vc.height = 240
-    const vctx = vc.getContext('2d')
-    const stream = vc.captureStream(15)
-    const rec = new MediaRecorder(stream, { mimeType: 'video/webm' })
-    const chunks = []
-    rec.ondataavailable = (e) => e.data.size && chunks.push(e.data)
-    const done = new Promise((res) => (rec.onstop = res))
-    rec.start()
-    const t0 = performance.now()
-    await new Promise((res) => {
-      function draw() {
-        const t = (performance.now() - t0) / 1000
-        vctx.fillStyle = `hsl(${(t * 200) % 360},80%,50%)`
-        vctx.fillRect(0, 0, vc.width, vc.height)
-        vctx.fillStyle = '#fff'
-        vctx.font = 'bold 40px sans-serif'
-        vctx.fillText('AR', 130, 130)
-        if (performance.now() - t0 < 700) requestAnimationFrame(draw)
-        else res()
+    async function makeImage(label) {
+      const c = document.createElement('canvas')
+      c.width = 640
+      c.height = 800
+      const ctx = c.getContext('2d')
+      ctx.fillStyle = '#111'
+      ctx.fillRect(0, 0, c.width, c.height)
+      const rnd = (n) => Math.floor(Math.random() * n)
+      for (let i = 0; i < 260; i++) {
+        ctx.fillStyle = `rgb(${rnd(256)},${rnd(256)},${rnd(256)})`
+        ctx.fillRect(rnd(c.width), rnd(c.height), 10 + rnd(60), 10 + rnd(60))
+        ctx.strokeStyle = '#fff'
+        ctx.strokeRect(rnd(c.width), rnd(c.height), 20 + rnd(80), 20 + rnd(80))
       }
-      draw()
-    })
-    rec.stop()
-    await done
-    const vidBlob = new Blob(chunks, { type: 'video/webm' })
-    setFile('input[accept="video/*"]', new File([vidBlob], 'clip.webm', { type: 'video/webm' }))
+      ctx.fillStyle = '#fff'
+      ctx.font = 'bold 64px sans-serif'
+      ctx.fillText(label, 40, 420)
+      return new Promise((r) => c.toBlob(r, 'image/png'))
+    }
+    async function makeVideo(label) {
+      const vc = document.createElement('canvas')
+      vc.width = 320
+      vc.height = 240
+      const vctx = vc.getContext('2d')
+      const rec = new MediaRecorder(vc.captureStream(15), { mimeType: 'video/webm' })
+      const chunks = []
+      rec.ondataavailable = (e) => e.data.size && chunks.push(e.data)
+      const done = new Promise((res) => (rec.onstop = res))
+      rec.start()
+      const t0 = performance.now()
+      await new Promise((res) => {
+        function draw() {
+          const t = (performance.now() - t0) / 1000
+          vctx.fillStyle = `hsl(${(t * 200) % 360},80%,50%)`
+          vctx.fillRect(0, 0, vc.width, vc.height)
+          vctx.fillStyle = '#fff'
+          vctx.font = 'bold 40px sans-serif'
+          vctx.fillText(label, 110, 130)
+          if (performance.now() - t0 < 700) requestAnimationFrame(draw)
+          else res()
+        }
+        draw()
+      })
+      rec.stop()
+      await done
+      return new Blob(chunks, { type: 'video/webm' })
+    }
+    for (let i = 0; i < 2; i++) {
+      setNthFile('input[accept="image/*"]', i, new File([await makeImage('P' + (i + 1))], `page-${i}.png`, { type: 'image/png' }))
+      setNthFile('input[accept="video/*"]', i, new File([await makeVideo('P' + (i + 1))], `clip-${i}.webm`, { type: 'video/webm' }))
+    }
   })
-  // Confirm the UI registered both files.
-  await page.getByText('page.png').waitFor({ timeout: 5000 })
-  await page.getByText('clip.webm').waitFor({ timeout: 5000 })
-  ok('Image + video attached and reflected in the UI')
+  await page.getByText('page-0.png').waitFor({ timeout: 5000 })
+  await page.getByText('page-1.png').waitFor({ timeout: 5000 })
+  ok('Two pages attached (multi-page book)')
 
   // 3. Publish -> compile -> save -> dashboard + share modal
   log('Publish (this runs the in-browser MindAR compile — can take a while)')
@@ -154,6 +154,8 @@ try {
   if (await page2.getByText('Experience not found').isVisible().catch(() => false)) {
     fail('Cross-device fetch failed: viewer says "Experience not found"')
   }
+  await page2.getByText('2 pages in this book').waitFor({ timeout: 10000 })
+  ok('Multi-page book metadata present on a clean device')
   await page2.getByRole('button', { name: 'Start camera' }).click()
   const scan2 = page2.getByText('aim at the comic page')
   const err2 = page2.getByText("Couldn't start")

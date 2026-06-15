@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import QRCode from 'qrcode'
-import { listExperiences, deleteExperience } from '../lib/db.js'
-import { deleteExperienceCloud } from '../lib/api.js'
+import { listExperiences, deleteExperience, saveExperience } from '../lib/db.js'
+import { deleteExperienceCloud, updateExperience } from '../lib/api.js'
 
 export default function Dashboard() {
   const [items, setItems] = useState(null)
@@ -37,6 +37,15 @@ export default function Dashboard() {
     refresh()
   }
 
+  async function handleRename(exp) {
+    const title = prompt('Rename experience', exp.title)?.trim()
+    if (!title || title === exp.title) return
+    const updated = { ...exp, title }
+    await updateExperience(exp.id, updated) // cloud
+    await saveExperience(updated) // local index
+    refresh()
+  }
+
   return (
     <div className="mx-auto max-w-6xl px-5 py-12">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -66,6 +75,7 @@ export default function Dashboard() {
                 key={exp.id}
                 exp={exp}
                 onShare={() => setShare(exp)}
+                onRename={() => handleRename(exp)}
                 onDelete={() => handleDelete(exp.id)}
               />
             ))}
@@ -78,7 +88,7 @@ export default function Dashboard() {
   )
 }
 
-function Card({ exp, onShare, onDelete }) {
+function Card({ exp, onShare, onRename, onDelete }) {
   const thumb = exp.pages?.[0]?.imageUrl
   const pageCount = exp.pages?.length || 1
 
@@ -117,9 +127,18 @@ function Card({ exp, onShare, onDelete }) {
             Share
           </button>
           <button
+            onClick={onRename}
+            className="rounded-lg border border-white/15 px-2.5 py-1.5 text-sm text-white/50 hover:border-pop hover:text-pop"
+            aria-label="Rename"
+            title="Rename"
+          >
+            ✎
+          </button>
+          <button
             onClick={onDelete}
             className="rounded-lg border border-white/15 px-2.5 py-1.5 text-sm text-white/50 hover:border-pop hover:text-pop"
             aria-label="Delete"
+            title="Delete"
           >
             ✕
           </button>
