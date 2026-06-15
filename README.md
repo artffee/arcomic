@@ -8,9 +8,20 @@ Everything runs **client-side** — image-target compilation, storage, and the A
 
 - **React + Vite + Tailwind CSS** — UI and build
 - **MindAR** (`mind-ar`) — in-browser image-target compilation + tracking (TensorFlow.js + Three.js under the hood)
-- **Three.js** — renders the video plane over the tracked page
-- **IndexedDB** — stores experiences (trigger image, overlay video, compiled `.mind` target) on-device
-- **qrcode** — share QR codes
+- **Three.js** — renders the video plane(s) over the tracked page
+- **Vercel Blob + serverless functions** (`/api`) — cloud storage for media + the compiled
+  target, and metadata CRUD, so **share links work on any device**
+- **IndexedDB** — a light local index of the experiences you created (for "My Comics")
+- **qrcode** — share QR codes (download PNG + print-ready sheet)
+
+### Architecture
+
+- **Create** compiles the AR target in your browser, uploads the image(s), video(s), and
+  `.mind` target **directly to Blob** (browser → storage, bypassing the function body
+  limit), then writes a small metadata JSON via `POST /api/experiences`.
+- **Viewer** fetches the experience by id from `GET /api/experiences/:id` (falling back to
+  the local index), so any phone with the link can load it.
+- A multi-page "book" compiles all page images into **one** target; anchor index = page.
 
 ## Getting started
 
@@ -47,28 +58,55 @@ Tip: a **high-contrast, detailed** comic page tracks far better than flat or rep
 ## Project structure
 
 ```
+api/
+  upload.js              Issues client tokens for direct browser -> Blob uploads
+  experiences/
+    index.js             POST create (writes meta JSON to Blob)
+    [id].js              GET / PUT / DELETE a single experience
 src/
   pages/
     Home.jsx       Marketing landing (hero, features, how-it-works, pricing)
-    Create.jsx     Upload + in-browser target compilation + save
-    Dashboard.jsx  Experience list, share modal (link + QR), delete
-    Viewer.jsx     MindAR camera viewer with the video overlay
-  components/       Navbar, Footer, Hero
+    Create.jsx     Multi-page upload + in-browser compile + cloud publish
+    Dashboard.jsx  Experience list, share (QR + print), rename, delete
+    Viewer.jsx     MindAR camera viewer (multi-page, cover-fit video overlay)
+  components/       Navbar, Footer, Hero, ErrorBoundary
   lib/
-    db.js          IndexedDB wrapper
+    db.js          Local index (IndexedDB)
+    api.js         Cloud client (Blob upload + metadata CRUD)
     mindar.js      MindAR compiler + engine loaders (lazy-imported)
+tests/             api.mjs (backend), e2e.mjs (browser, cross-device)
 ```
 
-## What's a real MVP vs. what's faked
+## Local development with the backend
 
-**Real & working:** upload, in-browser target compilation, local persistence, the AR
-camera viewer with image tracking + video overlay, share links/QR, delete.
+The `/api` functions need a Vercel Blob store. The project is already linked, so:
 
-**Illustrative only (next steps for production):**
+```bash
+vercel env pull           # writes BLOB_READ_WRITE_TOKEN into .env.local
+vercel dev                # runs the functions + app together
+```
 
-- **Cloud sync** — a backend (storage + DB) so experiences open on any device from a shared link.
-- **Accounts** — the pricing tiers are demo copy; there's no auth.
+> `vercel dev` + Vite has a known quirk where the SPA rewrite intercepts Vite's dev module
+> requests. Use `tests/api.mjs` to exercise the backend against `vercel dev`, and the
+> production deploy (or `npm run dev` for frontend-only) for the browser UI.
+
+## Tests
+
+- `node tests/api.mjs [baseUrl]` — backend round-trip (upload → fetch → CRUD).
+- `node tests/e2e.mjs [baseUrl]` — headless browser: load → build a 2-page book → compile →
+  publish → **cross-device** cloud fetch → AR engine start. Defaults to production.
+- CI (`.github/workflows/ci.yml`) builds every push/PR; the e2e is a manual `workflow_dispatch`.
+
+## What's real vs what's still illustrative
+
+**Real & working:** in-browser target compilation, **cloud storage with cross-device share
+links/QR**, printable QR, the AR viewer with image tracking + cover-fit video overlay,
+multi-page books, rename, delete.
+
+**Still illustrative (next steps):**
+
+- **Accounts/auth** — pricing tiers are demo copy; uploads are currently unauthenticated
+  (fine for a demo — add auth + rate limits before real public use).
 - **Analytics** — scan counts, etc.
 - **Dual Three.js instances** — the MindAR prod bundle ships its own Three.js while we import
   our own for the video plane. It works for this overlay; a production build would align them.
-```

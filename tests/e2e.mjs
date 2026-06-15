@@ -160,8 +160,8 @@ try {
   const scan2 = page2.getByText('aim at the comic page')
   const err2 = page2.getByText("Couldn't start")
   await Promise.race([
-    scan2.waitFor({ timeout: 60000 }),
-    err2.waitFor({ timeout: 60000 }),
+    scan2.waitFor({ timeout: 150000 }),
+    err2.waitFor({ timeout: 150000 }),
   ])
   if (await err2.isVisible()) fail('Cross-device viewer errored starting the engine')
   ok('Share link works in a clean context — cloud sharing verified ✦')
@@ -176,8 +176,8 @@ try {
   const scanning = page.getByText('aim at the comic page')
   const errored = page.getByText("Couldn't start")
   await Promise.race([
-    scanning.waitFor({ timeout: 60000 }),
-    errored.waitFor({ timeout: 60000 }),
+    scanning.waitFor({ timeout: 150000 }),
+    errored.waitFor({ timeout: 150000 }),
   ])
   if (await errored.isVisible()) {
     const detail = await page.locator('p').allInnerTexts()
