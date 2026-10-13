@@ -1,0 +1,4 @@
+node_modules/
+public/ar/vendor/mediapipe/*.task
+public/ar/vendor/mediapipe/vision-bundle.js
+public/ar/vendor/mediapipe/wasm/
