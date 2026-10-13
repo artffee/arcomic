@@ -1,0 +1,17 @@
+{
+  "name": "a408x-face-lab",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A408X local face-tracked camera transformations",
+  "scripts": {
+    "assets": "node scripts/setup-face-assets.mjs",
+    "test": "node tests/verify-face.cjs",
+    "check": "node --check public/ar/face-camera.js && node --check public/ar/face-art.js && node --check public/ar/face-worker.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "0.1.100"
+  }
+}

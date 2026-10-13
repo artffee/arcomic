@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#fff7e8">
+  <meta name="description" content="A408X Face Lab: become a handmade robot, strange alien, funny monster, or playful Halloween character. Private, on-device camera magic.">
+  <title>Face Lab — A408X Sqwad</title>
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./face.css">
+  <script src="./face-art.js" defer></script>
+  <script src="./face-camera.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#lab">Skip to Face Lab</a>
+  <header class="masthead">
+    <a href="https://a408x-gang.captainnemo007.chatgpt.site/" class="brand" aria-label="A408X Sqwad home">A408<span>X</span><small>THE FACE LAB</small></a>
+    <a class="back-link" href="https://a408x-gang.captainnemo007.chatgpt.site/">← Meet the Sqwad</a>
+  </header>
+  <main id="lab" class="shell">
+    <section class="intro">
+      <div><p class="eyebrow"><span class="star">✳</span> SMALL HUMAN. UNLIMITED IMAGINATION.</p><h1>Human heart.<br><span>Weird face.</span></h1></div>
+      <p class="intro-copy">A short circuit of the ordinary.<br>Become a robot. Befriend your inner alien.<br><strong>Wiggle. Blink. Get gloriously weird.</strong></p>
+    </section>
+    <div class="lab-grid">
+      <section class="camera-column" aria-label="Transformation mirror">
+        <div class="mirror" id="mirror">
+          <canvas id="faceCanvas" width="720" height="960" aria-label="Transformation preview: camera-free character demo"></canvas>
+          <video id="faceVideo" autoplay muted playsinline hidden></video>
+          <div class="stage-top"><span id="modeLabel" class="mode-label">DEMO · CAMERA OFF</span><button type="button" id="flipCamera" class="round-button" aria-label="Switch front and back camera" hidden>↻</button></div>
+          <div class="stage-bottom"><span class="stage-brand">A408X</span><div><strong id="stageName">Ziggy</strong><span id="stageTag">Human heart. Robot energy.</span></div><span class="live-dot" id="liveDot" aria-hidden="true"></span></div>
+        </div>
+        <p id="cameraStatus" class="status" role="status" aria-live="polite">The demo is ready. Your camera is off.</p>
+        <div class="camera-actions"><button type="button" id="startCamera" class="button primary"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h4l2-3h6l2 3h4v13H3Z"/><circle cx="12" cy="13" r="4"/></svg><span id="startLabel">Enable camera</span><span aria-hidden="true">↗</span></button><button type="button" id="capturePhoto" class="button secondary" disabled><span class="capture-icon" aria-hidden="true"></span>Take photo</button><button type="button" id="stopCamera" class="button secondary" hidden>Camera off</button></div>
+        <p class="permission-note">Ask a grown-up before opening the camera. It starts only after you tap <strong>Enable camera</strong> and allow your browser’s request.</p>
+      </section>
+      <aside class="control-column" aria-label="Character and effect controls">
+        <div class="selector-head"><span class="eyebrow">01 / CHOOSE YOUR WORLD</span><span class="mini-stamp">CERTIFIED<br>WEIRDO ✳</span></div>
+        <div class="world-tabs" role="group" aria-label="Character worlds">
+          <button type="button" data-world="robots" aria-pressed="true"><span aria-hidden="true">▦</span>Robots</button>
+          <button type="button" data-world="aliens" aria-pressed="false"><span aria-hidden="true">⏃</span>Aliens</button>
+          <button type="button" data-world="monsters" aria-pressed="false"><span aria-hidden="true">✹</span>Monsters</button>
+          <button type="button" data-world="halloween" aria-pressed="false"><span aria-hidden="true">✦</span>Halloween</button>
+        </div>
+        <div class="world-heading"><h2 id="worldName">The short-circuit club.</h2><p id="worldDescription">Old parts. Big feelings. New faces.</p></div>
+        <div id="characterList" class="character-list" role="group" aria-label="Choose a character"></div>
+        <div class="character-story"><span class="character-number" id="characterNumber">408 / 01</span><h3 id="characterName">Ziggy</h3><p id="characterStory">Built from spare parts. Runs entirely on kindness.</p><p class="challenge" id="challenge">✳ Smile to supercharge your circuits.</p></div>
+        <div class="effects"><span class="eyebrow">02 / A LITTLE EXTRA WEIRD</span><div class="effect-row"><label for="wildness">Wildness <output id="wildnessValue" for="wildness">60%</output></label><input id="wildness" type="range" min="0" max="100" value="60" step="5"></div><div class="toggle-row"><button type="button" id="effectsButton" aria-pressed="true">✧ Effects on</button><button type="button" id="surpriseButton">Surprise me ↗</button></div><label class="motion-choice"><input type="checkbox" id="calmMotion"> Calm motion</label></div>
+        <button type="button" id="demoButton" class="demo-link">Play with the camera-free demo <span aria-hidden="true">↗</span></button>
+        <a href="https://a408x-gang.captainnemo007.chatgpt.site/ar/index.html" class="studio-link">Make a robot poster / try full-body suits ↗</a>
+      </aside>
+    </div>
+    <section class="privacy-strip" aria-label="Privacy and tips"><div><span class="privacy-icon" aria-hidden="true">⌁</span><h2>Your face stays yours.</h2><p>Camera frames and face tracking stay on this device. No accounts for kids, no ads, no face uploads.</p></div><div><span class="privacy-icon" aria-hidden="true">✳</span><h2>A better kind of face time.</h2><p>One face at a time. Good light. Look towards the camera, then try a smile, a blink, or a big “wow”.</p></div><div><span class="privacy-icon" aria-hidden="true">↓</span><h2>Keep it only if you want.</h2><p>Take a photo, review it, then choose to save it to your device. Nothing is saved automatically.</p></div></section>
+  </main>
+  <footer class="footer"><span>A408X SQWAD / MADE OF IMAGINATION.</span><span>WEIRD IS A SUPERPOWER. © 2026</span></footer>
+  <dialog id="photoDialog" aria-labelledby="photoTitle">
+    <div class="photo-heading"><h2 id="photoTitle">A little proof of weird.</h2><button type="button" id="closePhoto" class="round-button" aria-label="Discard photo and close">×</button></div>
+    <img id="photoPreview" alt="Your captured A408X character photo">
+    <p id="photoStatus" role="status">Only in memory. Save to your device if you want to keep it.</p>
+    <div class="photo-actions"><button type="button" id="savePhoto" class="button primary">Save photo to device ↓</button><button type="button" id="discardPhoto" class="button secondary">Discard photo</button></div>
+    <a id="photoDownload" class="download-link" hidden>Open photo to save manually</a>
+  </dialog>
+</body>
+</html>
