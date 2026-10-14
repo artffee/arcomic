@@ -1,0 +1,17 @@
+{
+  "name": "a408x-robot-rumble",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Original A408X robot battles for keyboard and touch, solo and local two-player",
+  "scripts": {
+    "check": "node scripts/check.mjs",
+    "test": "node --test tests/robot-rumble/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "0.1.100"
+  }
+}
